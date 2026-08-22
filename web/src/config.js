@@ -2,8 +2,8 @@
 // Leave as the zero address to play in local sandbox mode: taps paint and
 // persist in your browser only. Deploy the contract (deploy.html, or one of the
 // scripts) and the same page becomes the real onchain game.
-const DEFAULT_ADDRESS = "0x0000000000000000000000000000000000000000";
-const DEFAULT_BLOCK = 0n;
+const DEFAULT_ADDRESS = "0x4c99EC68D83392769041F12de8dA930F365d63F3";
+const DEFAULT_BLOCK = 55969461n;
 
 // ?turf=0x…&from=<block> points the board at a contract without a commit, so a
 // deploy made on a phone is shareable as a link straight away.
