@@ -1,3 +1,4 @@
+import { log } from "./log.js";
 import {
   createPublicClient,
   createWalletClient,
@@ -102,10 +103,12 @@ export function watchClaims(address, onClaim) {
     abi: TURF_ABI,
     eventName: "Claimed",
     onLogs: (logs) => {
-      for (const log of logs) {
-        onClaim(Number(log.args.osmWayId), Number(log.args.team));
+      for (const entry of logs) {
+        onClaim(Number(entry.args.osmWayId), Number(entry.args.team));
       }
     },
+    // A dropped poll must not become an unhandled rejection mid-demo.
+    onError: (error) => log("claim watch error:", error.shortMessage ?? error.message),
   });
 }
 

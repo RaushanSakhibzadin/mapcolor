@@ -1,0 +1,120 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>mapcolor — deploy Turf</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="8" height="8" fill="%23ff3b30"/><rect x="8" y="8" width="8" height="8" fill="%230a84ff"/></svg>' />
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #10131a; color: #e7e9ee; padding: 24px 18px calc(24px + env(safe-area-inset-bottom));
+    font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; max-width: 560px; margin-inline: auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 22px; opacity: .65; font-size: 13px; }
+  button { width: 100%; border: 0; border-radius: 12px; padding: 16px; margin-bottom: 10px;
+    font: 600 16px/1 ui-sans-serif, system-ui, sans-serif; color: #10131a; background: #30d158; cursor: pointer; }
+  button[disabled] { background: #2a2f3d; color: #6c7386; }
+  .row { background: #171b25; border: 1px solid #ffffff14; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .row b { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .5; margin-bottom: 4px; }
+  code { font: 13px/1.5 ui-monospace, monospace; word-break: break-all; -webkit-user-select: all; user-select: all; }
+  a.board { display: block; text-align: center; background: #0a84ff; color: #fff; text-decoration: none;
+    border-radius: 12px; padding: 16px; font-weight: 600; margin-bottom: 10px; }
+  #log { font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; word-break: break-word;
+    background: #0b0d12; border: 1px solid #ffffff14; border-radius: 12px; padding: 12px; color: #cfd4e0; margin-top: 16px; }
+  .hide { display: none; }
+</style>
+
+<h1>Deploy Turf</h1>
+<p class="sub">Deploys the turf war contract from your phone, using the wallet you are browsing in. Testnet MON required — nothing here touches mainnet.</p>
+
+<button id="connect" type="button">Connect wallet</button>
+<div id="account" class="row hide"><b>Deployer</b><code id="address"></code><div id="balance" style="margin-top:6px;opacity:.7"></div></div>
+<button id="deploy" type="button" disabled>Deploy contract</button>
+
+<div id="result" class="hide">
+  <div class="row"><b>Contract address</b><code id="deployed"></code></div>
+  <div class="row"><b>Deploy block</b><code id="block"></code></div>
+  <a class="board" id="open" href="#">Open the board on this contract →</a>
+  <button id="copy" type="button" style="background:#2a2f3d;color:#e7e9ee">Copy address and block</button>
+</div>
+
+<pre id="log">ready</pre>
+
+<script type="module">
+import { createWalletClient, custom, formatEther } from "https://esm.sh/viem@2.21.54";
+import { monadTestnet, publicClient } from "./src/chain.js";
+
+const TEAM_COUNT = 4;
+const el = (id) => document.getElementById(id);
+const log = (line) => (el("log").textContent += `\n${line}`);
+
+let wallet = null;
+let account = null;
+let artifact = null;
+
+// Compiled Turf, committed next to the page — the same file scripts/deploy.mjs
+// deploys, so what you get here is what the repo says it is.
+try {
+  artifact = await (await fetch("./turf.json")).json();
+  log(`artifact loaded (${(artifact.bytecode.length - 2) / 2} bytes)`);
+} catch (error) {
+  log(`could not load the contract artifact: ${error.message}`);
+}
+
+el("connect").onclick = async () => {
+  try {
+    if (!window.ethereum) {
+      log("no wallet in this browser — open this page inside your wallet app's browser (MetaMask → Browser → paste this URL)");
+      return;
+    }
+    wallet = createWalletClient({ chain: monadTestnet, transport: custom(window.ethereum) });
+    [account] = await wallet.requestAddresses();
+    log(`connected ${account}`);
+
+    try {
+      await wallet.switchChain({ id: monadTestnet.id });
+    } catch (error) {
+      log("adding Monad testnet to the wallet…");
+      await wallet.addChain({ chain: monadTestnet });
+    }
+
+    const balance = await publicClient.getBalance({ address: account });
+    el("address").textContent = account;
+    el("balance").textContent = `${formatEther(balance)} MON on chain ${monadTestnet.id}`;
+    el("account").classList.remove("hide");
+    el("deploy").disabled = !artifact || balance === 0n;
+    if (balance === 0n) log("no MON yet — fund this address at the faucet, then reload");
+  } catch (error) {
+    log(`connect failed: ${error.shortMessage ?? error.message}`);
+  }
+};
+
+el("deploy").onclick = async () => {
+  el("deploy").disabled = true;
+  try {
+    log("sending the deploy transaction — approve it in your wallet…");
+    const hash = await wallet.deployContract({
+      abi: artifact.abi,
+      bytecode: artifact.bytecode,
+      args: [TEAM_COUNT],
+      account,
+      chain: monadTestnet,
+    });
+    log(`sent ${hash}, waiting for the receipt…`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`deploy reverted (${hash})`);
+
+    const address = receipt.contractAddress;
+    const block = receipt.blockNumber.toString();
+    el("deployed").textContent = address;
+    el("block").textContent = block;
+    el("open").href = `./index.html?turf=${address}&from=${block}`;
+    el("result").classList.remove("hide");
+    el("copy").onclick = () => navigator.clipboard
+      .writeText(`TURF_ADDRESS = "${address}"\nDEPLOY_BLOCK = ${block}n`)
+      .then(() => (el("copy").textContent = "copied"), (e) => log(`clipboard blocked: ${e.message}`));
+    log(`deployed ${address} in block ${block}`);
+  } catch (error) {
+    log(`deploy failed: ${error.shortMessage ?? error.message}`);
+    el("deploy").disabled = false;
+  }
+};
+</script>

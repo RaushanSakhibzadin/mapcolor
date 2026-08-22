@@ -144,3 +144,5 @@ vite.config.ts.timestamp-*
 
 # Committed template — the real .env stays ignored above.
 !.env.example
+
+# The compiled artifact lives at web/turf.json so the browser can fetch it.
