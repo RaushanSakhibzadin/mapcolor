@@ -1,0 +1,12 @@
+{
+  "name": "mapcolor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "node scripts/deploy.mjs",
+    "serve": "python3 -m http.server 5173 --directory web"
+  },
+  "dependencies": {
+    "viem": "^2.21.54"
+  }
+}
