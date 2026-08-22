@@ -1,4 +1,4 @@
-import { DEPLOY_BLOCK, TURF_ADDRESS } from "./config.js";
+import { CHAIN_NAME, DEPLOY_BLOCK, TURF_ADDRESS } from "./config.js";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 export const isConfigured = TURF_ADDRESS.toLowerCase() !== ZERO;
@@ -38,7 +38,7 @@ async function onchainStore({ onClaim, onStatus }) {
   let session = null;
   return {
     mode: "onchain",
-    label: `onchain · ${TURF_ADDRESS.slice(0, 6)}…${TURF_ADDRESS.slice(-4)}`,
+    label: `${CHAIN_NAME} · ${TURF_ADDRESS.slice(0, 6)}…${TURF_ADDRESS.slice(-4)} · real MON`,
     claims,
     async claim(osmWayId, team) {
       if (!session) session = await connect();
