@@ -13,6 +13,15 @@ Until a contract address is set in `web/src/config.js`, the live page runs in **
 - **Recolors are feature-state writes.** The paint expression is written once; a claim only calls `setFeatureState`, which repaints that one building without re-parsing the style. Taps land visibly during the demo.
 - **Claims overwrite.** Re-tapping your own building is a no-op; taking one from another team is not. A settled map is a boring demo.
 
+## Why this shape suits Monad
+
+Every claim writes exactly one storage slot, keyed by the building's OSM way ID.
+Two players tapping different buildings touch disjoint state, so optimistic
+parallel execution runs them side by side; the only transactions that clash and
+re-run are two people fighting over the *same* building — which is precisely the
+moment the game is interesting. Contention in the game is contention in the
+execution engine, and nowhere else.
+
 ## Layout
 
 ```
