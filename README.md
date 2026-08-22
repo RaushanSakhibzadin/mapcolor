@@ -37,11 +37,12 @@ nothing to break at 3am. Pushing to `main` publishes `web/` to GitHub Pages.
 ## Going onchain
 
 ```sh
-cd contracts
-forge create src/Turf.sol:Turf --rpc-url monad_testnet --private-key $PK --constructor-args 4
+cast wallet new                     # throwaway key, never a wallet with funds
+cp contracts/.env.example contracts/.env   # paste the key, fund the address
+./contracts/deploy.sh               # deploys and writes web/src/config.js
 ```
 
-Put the address and its deploy block in `web/src/config.js`. The page picks up
+Testnet MON comes from the Monad faucet, or from the organizers at the venue. The page picks up
 the chain path automatically, prompts to add Monad testnet on the first tap, and
 every player's board then converges on the `Claimed` event feed.
 
