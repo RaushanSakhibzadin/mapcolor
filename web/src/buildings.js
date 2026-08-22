@@ -1,4 +1,5 @@
 import { AREA, OVERPASS_URLS } from "./config.js";
+import { log } from "./log.js";
 
 const CACHE_KEY = `mapcolor.buildings.${AREA.bbox.join(",")}`;
 
@@ -43,6 +44,7 @@ export async function loadBuildings({ onStatus = () => {} } = {}) {
   for (const url of OVERPASS_URLS) {
     try {
       onStatus("loading buildings from OpenStreetMap…");
+      log("overpass request", url);
       const response = await fetch(url, {
         method: "POST",
         body: new URLSearchParams({ data: query(AREA.bbox) }),
@@ -56,7 +58,7 @@ export async function loadBuildings({ onStatus = () => {} } = {}) {
       return geojson;
     } catch (error) {
       lastError = error;
-      console.warn("overpass failed", error);
+      log("overpass failed:", `${url} ${error.message}`);
     }
   }
   throw lastError ?? new Error("could not load buildings");
