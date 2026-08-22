@@ -65,7 +65,18 @@ export async function connect() {
     transport: custom(window.ethereum),
   });
   const [account] = await wallet.requestAddresses();
+  await ensureMonad(wallet);
   return { wallet, account };
+}
+
+/** Nobody at a hackathon has Monad testnet pre-added. Offer to add it. */
+async function ensureMonad(wallet) {
+  try {
+    await wallet.switchChain({ id: monadTestnet.id });
+  } catch (error) {
+    if (error.code !== 4902 && error.name !== "ChainNotConfiguredError") throw error;
+    await wallet.addChain({ chain: monadTestnet });
+  }
 }
 
 /** Replay every claim from deployment, newest write wins. */

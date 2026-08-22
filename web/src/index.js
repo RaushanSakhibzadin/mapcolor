@@ -1,82 +1,102 @@
 import maplibregl from "https://esm.sh/maplibre-gl@4.7.1";
-import {
-  BELGRADE,
-  BUILDING_SOURCE,
-  BUILDING_SOURCE_LAYER,
-  DEPLOY_BLOCK,
-  OSM_ID_PROPERTY,
-  STYLE_URL,
-  TURF_ADDRESS,
-} from "./config.js";
-import { connect, loadClaims, sendClaim, watchClaims } from "./chain.js";
-import { paintAll, paintClaim, turfLayer } from "./paint.js";
-import { TEAMS } from "./teams.js";
+import { AREA, BELGRADE, STYLE_URL } from "./config.js";
+import { loadBuildings } from "./buildings.js";
+import { paintAll, paintClaim, turfLayers } from "./paint.js";
+import { createStore } from "./store.js";
+import { TEAMS, colorOf } from "./teams.js";
 
-const ids = { source: BUILDING_SOURCE, sourceLayer: BUILDING_SOURCE_LAYER };
-const claims = new Map();
-let session = null;
+const ids = { source: "turf" };
+const el = (id) => document.getElementById(id);
+const setStatus = (text) => (el("status").textContent = text);
+
 let myTeam = 1;
+let store = null;
 
 const map = new maplibregl.Map({
   container: "map",
   style: STYLE_URL,
   ...BELGRADE,
-  // Without this the building features have no id and setFeatureState is a no-op.
-  transformStyle: (_previous, next) => {
-    next.sources[BUILDING_SOURCE] = {
-      ...next.sources[BUILDING_SOURCE],
-      promoteId: { [BUILDING_SOURCE_LAYER]: OSM_ID_PROPERTY },
-    };
-    return next;
-  },
+  maxBounds: [
+    [AREA.bbox[1] - 0.01, AREA.bbox[0] - 0.01],
+    [AREA.bbox[3] + 0.01, AREA.bbox[2] + 0.01],
+  ],
 });
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
 map.on("load", async () => {
-  map.addLayer(turfLayer({ source: BUILDING_SOURCE, sourceLayer: BUILDING_SOURCE_LAYER }));
+  try {
+    const buildings = await loadBuildings({ onStatus: setStatus });
+    map.addSource("turf", { type: "geojson", data: buildings });
+    for (const layer of turfLayers(ids)) map.addLayer(layer);
 
-  for (const [id, team] of await loadClaims(TURF_ADDRESS, DEPLOY_BLOCK)) {
-    claims.set(id, team);
+    store = await createStore({
+      onClaim: (osmWayId, team) => {
+        paintClaim(map, ids, osmWayId, team);
+        renderScores();
+      },
+      onStatus: setStatus,
+    });
+
+    paintAll(map, ids, store.claims);
+    renderScores();
+    el("mode").textContent = store.label;
+    setStatus(`${buildings.features.length} buildings · tap one to claim it`);
+  } catch (error) {
+    setStatus(`could not start: ${error.message}`);
+    console.error(error);
   }
-  paintAll(map, ids, claims);
-
-  // Every player's map recolors off the same event feed, so the room watches
-  // buildings flip as taps land — no polling, no backend.
-  watchClaims(TURF_ADDRESS, (osmWayId, team) => {
-    claims.set(osmWayId, team);
-    paintClaim(map, ids, osmWayId, team);
-  });
 });
 
 map.on("click", "turf", async (e) => {
   const osmWayId = e.features[0]?.id;
-  if (osmWayId == null) return;
-  if (!session) session = await connect();
+  if (osmWayId == null || !store) return;
 
-  // Paint first, confirm later: the tap has to feel instant. The Claimed event
-  // repaints the same building a moment later, and if the tx fails the next
-  // event for that building corrects us.
+  // Paint first, confirm later: the tap has to feel instant. If the claim
+  // fails we put the building back to whatever the store still believes.
+  const previous = store.claims.get(osmWayId) ?? 0;
   paintClaim(map, ids, osmWayId, myTeam);
   try {
-    await sendClaim({ ...session, address: TURF_ADDRESS, osmWayId, team: myTeam });
-  } catch (err) {
-    paintClaim(map, ids, osmWayId, claims.get(osmWayId) ?? 0);
-    console.warn("claim failed", err);
+    await store.claim(osmWayId, myTeam);
+  } catch (error) {
+    paintClaim(map, ids, osmWayId, previous);
+    setStatus(`claim failed: ${error.shortMessage ?? error.message}`);
   }
 });
 
 map.on("mouseenter", "turf", () => (map.getCanvas().style.cursor = "crosshair"));
 map.on("mouseleave", "turf", () => (map.getCanvas().style.cursor = ""));
 
-const picker = document.getElementById("teams");
+function renderScores() {
+  const counts = new Map(TEAMS.map((t) => [t.id, 0]));
+  for (const team of store.claims.values()) {
+    counts.set(team, (counts.get(team) ?? 0) + 1);
+  }
+  for (const team of TEAMS) {
+    el(`score-${team.id}`).textContent = counts.get(team.id);
+  }
+}
+
+const picker = el("teams");
 for (const team of TEAMS) {
   const button = document.createElement("button");
-  button.textContent = team.name;
+  button.type = "button";
   button.style.background = team.color;
-  button.onclick = () => {
-    myTeam = team.id;
-    for (const other of picker.children) other.classList.remove("active");
-    button.classList.add("active");
-  };
+  button.innerHTML = `${team.name} <span id="score-${team.id}">0</span>`;
+  button.onclick = () => selectTeam(team.id);
   picker.append(button);
 }
-picker.firstChild.classList.add("active");
+
+function selectTeam(id) {
+  myTeam = id;
+  [...picker.children].forEach((button, index) => {
+    button.classList.toggle("active", TEAMS[index].id === id);
+  });
+  el("map").style.setProperty("--team", colorOf(id));
+}
+
+selectTeam(myTeam);
+// Number keys switch teams — faster than aiming at a button mid-scrum.
+addEventListener("keydown", (e) => {
+  const n = Number(e.key);
+  if (TEAMS.some((t) => t.id === n)) selectTeam(n);
+});

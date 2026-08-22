@@ -2,8 +2,8 @@ import { NEUTRAL, TEAMS } from "./teams.js";
 
 // The whole rendering trick: the style is written once, and every claim after
 // that is a feature-state write. MapLibre re-paints the changed feature without
-// re-parsing the style or the tiles, so a tap recolors in the same frame the
-// event lands. Nothing here touches geometry.
+// re-parsing the style or re-reading the source, so a tap recolors in the same
+// frame the claim lands. Nothing here touches geometry.
 //
 // `["feature-state", "team"]` is null until we set it, so coalesce to 0 and let
 // `match` fall through to NEUTRAL.
@@ -15,47 +15,46 @@ export const teamFillColor = [
 ];
 
 // Claimed buildings read as solid; neutral ones stay washed out so the map
-// still looks like a map at the start of the round.
+// still looks like a map at the start of a round.
 export const teamFillOpacity = [
   "case",
-  [">", ["coalesce", ["feature-state", "team"], 0], 0], 0.85,
-  0.25,
+  [">", ["coalesce", ["feature-state", "team"], 0], 0], 0.8,
+  0.3,
 ];
 
-/** The layer to add above the basemap's own building layer. */
-export function turfLayer({ id = "turf", source, sourceLayer }) {
-  return {
-    id,
-    type: "fill",
-    source,
-    "source-layer": sourceLayer,
-    filter: ["==", ["geometry-type"], "Polygon"],
-    paint: {
-      "fill-color": teamFillColor,
-      "fill-opacity": teamFillOpacity,
-      "fill-outline-color": "rgba(0,0,0,0.35)",
+/** Fill + outline layers for the board. `sourceLayer` is only for vector tiles. */
+export function turfLayers({ source, sourceLayer }) {
+  const sourceLayerKey = sourceLayer ? { "source-layer": sourceLayer } : {};
+  return [
+    {
+      id: "turf",
+      type: "fill",
+      source,
+      ...sourceLayerKey,
+      paint: { "fill-color": teamFillColor, "fill-opacity": teamFillOpacity },
     },
-  };
+    {
+      id: "turf-outline",
+      type: "line",
+      source,
+      ...sourceLayerKey,
+      paint: { "line-color": teamFillColor, "line-width": 0.6, "line-opacity": 0.9 },
+    },
+  ];
 }
 
-/**
- * Apply one claim. `osmWayId` is the feature id, which requires the source to
- * expose OSM way IDs as feature ids — see promoteId in index.js.
- */
+/** Apply one claim. `osmWayId` must be the feature id, not a property. */
 export function paintClaim(map, { source, sourceLayer }, osmWayId, team) {
-  map.setFeatureState(
-    { source, sourceLayer, id: osmWayId },
-    { team },
-  );
+  map.setFeatureState({ source, sourceLayer, id: osmWayId }, { team });
 }
 
-/** Replay a whole snapshot (Map of osmWayId -> team) after tiles first load. */
+/** Replay a whole snapshot (Map of osmWayId -> team). */
 export function paintAll(map, ids, claims) {
   for (const [osmWayId, team] of claims) paintClaim(map, ids, osmWayId, team);
 }
 
 /**
- * Fallback for tile sources that do NOT carry usable feature ids, where
+ * Fallback for vector tile sources that do NOT carry usable feature ids, where
  * setFeatureState has nothing to attach to. This bakes the claims straight into
  * the paint property — correct, but it re-evaluates the expression for every
  * feature in view on each update, so only reach for it if promoteId fails.
