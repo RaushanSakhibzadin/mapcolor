@@ -75,6 +75,21 @@ let preferred = readers[0];
 
 export const publicClient = preferred.client;
 
+// What the log can honestly say about the connection. A wallet never exposes
+// the RPC URL behind it — only its chain id — so the endpoint is named for our
+// own reader and reported as "wallet" for the injected one.
+log(`chain readers: ${readers.map((r) => r.name).join(" then ")}`);
+log(`configured rpc: ${monadTestnet.rpcUrls.default.http[0]} (chain ${monadTestnet.id})`);
+if (injected) {
+  injected
+    .request({ method: "eth_chainId" })
+    .then((id) => {
+      const chainId = Number.parseInt(id, 16);
+      log(`wallet chain: ${chainId}${chainId === monadTestnet.id ? "" : ` — expected ${monadTestnet.id}`}`);
+    })
+    .catch((error) => log("wallet chain unknown:", error.message));
+}
+
 export async function connect() {
   if (!window.ethereum) throw new Error("No injected wallet found");
   const wallet = createWalletClient({
