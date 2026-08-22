@@ -15,6 +15,18 @@ export const DEPLOY_BLOCK = override && /^\d+$/.test(params.get("from") ?? "")
   ? BigInt(params.get("from"))
   : DEFAULT_BLOCK;
 
+// Monad mainnet, as MetaMask reports it: chain 143 (0x8f), explorer monadscan.
+// Taps here cost real MON, which is exactly what the pitch claims.
+export const CHAIN_ID = 143;
+export const CHAIN_NAME = "Monad";
+export const EXPLORER_URL = "https://monadscan.com";
+
+// No public mainnet RPC is configured: MetaMask's own default is Infura, which
+// needs an API key, and nothing unauthenticated has been verified. So the board
+// reads through the wallet's provider, and ?rpc=https://… supplies a fallback
+// for anyone opening the link outside a wallet browser.
+export const RPC_URL = params.get("rpc") ?? "";
+
 // --- Map ---------------------------------------------------------------
 // OpenFreeMap needs no API key and no signup. Swap in MapTiler/your own tiles
 // by changing this one URL.

@@ -23,7 +23,7 @@
 </style>
 
 <h1>Deploy Turf</h1>
-<p class="sub">Deploys the turf war contract from your phone, using the wallet you are browsing in. Testnet MON required — nothing here touches mainnet.</p>
+<p class="sub">Deploys the turf war contract from your phone, using the wallet you are browsing in. Check the chain the log reports before you tap deploy — Monad mainnet spends real MON.</p>
 
 <button id="connect" type="button">Connect wallet</button>
 <div id="account" class="row hide"><b>Deployer</b><code id="address"></code><div id="balance" style="margin-top:6px;opacity:.7"></div></div>
@@ -40,7 +40,7 @@
 
 <script type="module">
 import { createPublicClient, createWalletClient, custom, defineChain, formatEther } from "https://esm.sh/viem@2.21.54";
-import { monadTestnet } from "./src/chain.js";
+import { monadChain } from "./src/chain.js";
 
 const TEAM_COUNT = 4;
 
@@ -78,12 +78,12 @@ el("connect").onclick = async () => {
 
     // Offer the switch, but never insist: if the wallet declines we deploy on
     // whatever it is already on and say so plainly.
-    await wallet.switchChain({ id: monadTestnet.id }).catch(() => {});
+    await wallet.switchChain({ id: monadChain.id }).catch(() => {});
 
     const chainId = await wallet.getChainId();
     chain = defineChain({
       id: chainId,
-      name: chainId === monadTestnet.id ? monadTestnet.name : `chain ${chainId}`,
+      name: chainId === monadChain.id ? monadChain.name : `chain ${chainId}`,
       nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
       rpcUrls: { default: { http: [] } },
     });
@@ -94,8 +94,10 @@ el("connect").onclick = async () => {
     el("balance").textContent = `${formatEther(balance)} MON on ${chain.name} (id ${chainId})`;
     el("account").classList.remove("hide");
     log(`wallet is on chain ${chainId}`);
-    if (chainId !== monadTestnet.id) {
-      log(`WARNING: expected Monad testnet (${monadTestnet.id}). Deploying here spends whatever this network's funds are worth — switch network in MetaMask if that is not what you want.`);
+    if (chainId !== monadChain.id) {
+      log(`WARNING: expected ${monadChain.name} (${monadChain.id}), and this is chain ${chainId}. Deploying here spends whatever that network's gas is worth — switch network in MetaMask if that is not what you want.`);
+    } else {
+      log(`heads up: ${monadChain.name} is a mainnet — this deploy spends real MON.`);
     }
     el("deploy").disabled = !artifact || balance === 0n;
     if (balance === 0n) log("no MON yet — fund this address at the faucet, then reload");

@@ -4,7 +4,9 @@ Onchain turf war on a live OpenStreetMap of Belgrade. Tap a building, claim it f
 
 **Play:** https://raushansakhibzadin.github.io/mapcolor/ — pick a team at the bottom, tap any building to paint it. Tapping someone else's building takes it. There is no cooldown, and number keys 1–4 switch teams.
 
-Live on Monad testnet at [`0x4c99EC68D83392769041F12de8dA930F365d63F3`](https://testnet.monadexplorer.com/address/0x4c99EC68D83392769041F12de8dA930F365d63F3) — deployed from a phone, through `deploy.html`, during Monad Blitz Belgrade. Every tap is a transaction against it.
+Live on **Monad mainnet** (chain 143) at [`0x4c99EC68D83392769041F12de8dA930F365d63F3`](https://monadscan.com/address/0x4c99EC68D83392769041F12de8dA930F365d63F3) — deployed from a phone, through `deploy.html`, during Monad Blitz Belgrade. Every tap is a real transaction costing real MON, which is the point and also the warning.
+
+The board reads the chain through your wallet's provider. Opened outside a wallet browser there is no fallback RPC configured — MetaMask's own default is Infura, which needs a key — so pass one with `?rpc=https://…` if you have it.
 
 ## How it works
 

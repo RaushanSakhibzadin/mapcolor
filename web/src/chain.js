@@ -1,3 +1,4 @@
+import { CHAIN_ID, CHAIN_NAME, EXPLORER_URL, RPC_URL } from "./config.js";
 import { log } from "./log.js";
 import {
   createPublicClient,
@@ -7,15 +8,12 @@ import {
   http,
 } from "https://esm.sh/viem@2.21.54";
 
-// Double-check chainId/RPC against the Blitz organisers' handout before demoing.
-export const monadTestnet = defineChain({
-  id: 10143,
-  name: "Monad Testnet",
+export const monadChain = defineChain({
+  id: CHAIN_ID,
+  name: CHAIN_NAME,
   nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
-  rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
-  blockExplorers: {
-    default: { name: "Monad Explorer", url: "https://testnet.monadexplorer.com" },
-  },
+  rpcUrls: { default: { http: RPC_URL ? [RPC_URL] : [] } },
+  blockExplorers: { default: { name: "MonadScan", url: EXPLORER_URL } },
 });
 
 export const TURF_ABI = [
@@ -62,30 +60,32 @@ const injected = globalThis.ethereum;
 const readers = [
   injected && {
     name: "wallet",
-    client: createPublicClient({ chain: monadTestnet, transport: custom(injected), pollingInterval: POLLING }),
+    client: createPublicClient({ chain: monadChain, transport: custom(injected), pollingInterval: POLLING }),
   },
-  {
-    name: monadTestnet.rpcUrls.default.http[0],
-    client: createPublicClient({ chain: monadTestnet, transport: http(), pollingInterval: POLLING }),
+  RPC_URL && {
+    name: RPC_URL,
+    client: createPublicClient({ chain: monadChain, transport: http(RPC_URL), pollingInterval: POLLING }),
   },
 ].filter(Boolean);
 
-// Whichever reader last worked; the live watch follows the replay.
-let preferred = readers[0];
+// Whichever reader last worked; the live watch follows the replay. There may be
+// none at all — no wallet and no ?rpc — and that has to stay a readable error
+// rather than a crash on import.
+let preferred = readers[0] ?? null;
 
-export const publicClient = preferred.client;
+export const publicClient = preferred?.client ?? null;
 
 // What the log can honestly say about the connection. A wallet never exposes
 // the RPC URL behind it — only its chain id — so the endpoint is named for our
 // own reader and reported as "wallet" for the injected one.
-log(`chain readers: ${readers.map((r) => r.name).join(" then ")}`);
-log(`configured rpc: ${monadTestnet.rpcUrls.default.http[0]} (chain ${monadTestnet.id})`);
+log(`chain readers: ${readers.map((r) => r.name).join(" then ") || "none — open this in a wallet browser, or add ?rpc=https://…"}`);
+log(`configured chain: ${CHAIN_NAME} (${CHAIN_ID})${RPC_URL ? `, rpc ${RPC_URL}` : ", no fallback rpc"}`);
 if (injected) {
   injected
     .request({ method: "eth_chainId" })
     .then((id) => {
       const chainId = Number.parseInt(id, 16);
-      log(`wallet chain: ${chainId}${chainId === monadTestnet.id ? "" : ` — expected ${monadTestnet.id}`}`);
+      log(`wallet chain: ${chainId}${chainId === CHAIN_ID ? "" : ` — expected ${CHAIN_ID}`}`);
     })
     .catch((error) => log("wallet chain unknown:", error.message));
 }
@@ -93,7 +93,7 @@ if (injected) {
 export async function connect() {
   if (!window.ethereum) throw new Error("No injected wallet found");
   const wallet = createWalletClient({
-    chain: monadTestnet,
+    chain: monadChain,
     transport: custom(window.ethereum),
   });
   const [account] = await wallet.requestAddresses();
@@ -101,13 +101,13 @@ export async function connect() {
   return { wallet, account };
 }
 
-/** Nobody at a hackathon has Monad testnet pre-added. Offer to add it. */
+/** Offer to move the wallet to Monad; never insist, the board reports the chain. */
 async function ensureMonad(wallet) {
   try {
-    await wallet.switchChain({ id: monadTestnet.id });
+    await wallet.switchChain({ id: monadChain.id });
   } catch (error) {
     if (error.code !== 4902 && error.name !== "ChainNotConfiguredError") throw error;
-    await wallet.addChain({ chain: monadTestnet });
+    await wallet.addChain({ chain: monadChain });
   }
 }
 
@@ -135,11 +135,15 @@ export async function loadClaims(address, fromBlock = 0n) {
       log(`replay via ${reader.name} failed:`, error.shortMessage ?? error.message);
     }
   }
-  throw lastError ?? new Error("no way to read the chain");
+  throw lastError ?? new Error("no way to read the chain — open this in a wallet browser, or add ?rpc=https://… to the URL");
 }
 
 /** Tail new claims. Returns an unwatch function. */
 export function watchClaims(address, onClaim) {
+  if (!preferred) {
+    log("no chain reader: the board will show your own taps but not anyone else's");
+    return () => {};
+  }
   return preferred.client.watchContractEvent({
     address,
     abi: TURF_ABI,
