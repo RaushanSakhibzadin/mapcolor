@@ -24,7 +24,12 @@ async function onchainStore({ onClaim, onStatus }) {
   const { connect, loadClaims, sendClaim, watchClaims } = await import("./chain.js");
 
   onStatus("replaying claims…");
-  const claims = await loadClaims(TURF_ADDRESS, DEPLOY_BLOCK);
+  // A failed replay must not take the board down: start empty and keep playing,
+  // the live watch will still catch everything from here on.
+  const claims = await loadClaims(TURF_ADDRESS, DEPLOY_BLOCK).catch((error) => {
+    onStatus(`could not replay past claims: ${error.shortMessage ?? error.message}`, true);
+    return new Map();
+  });
   watchClaims(TURF_ADDRESS, (osmWayId, team) => {
     claims.set(osmWayId, team);
     onClaim(osmWayId, team);

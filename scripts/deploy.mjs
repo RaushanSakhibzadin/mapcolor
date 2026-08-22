@@ -24,7 +24,7 @@ const chain = defineChain({
   rpcUrls: { default: { http: [rpcUrl] } },
 });
 
-const artifact = JSON.parse(readFileSync(`${root}contracts/out/Turf.json`, "utf8"));
+const artifact = JSON.parse(readFileSync(`${root}web/turf.json`, "utf8"));
 const account = privateKeyToAccount(env.PRIVATE_KEY);
 const publicClient = createPublicClient({ chain, transport: http() });
 const wallet = createWalletClient({ account, chain, transport: http() });

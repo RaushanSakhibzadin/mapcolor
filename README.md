@@ -27,6 +27,8 @@ execution engine, and nowhere else.
 ```
 contracts/src/Turf.sol   ~60 lines: teamOf, scoreOf, claim, claimMany, Claimed
 web/src/config.js        contract address, playfield bbox, basemap  ← edit this first
+web/deploy.html          deploy the contract from a phone, via the browser wallet
+web/turf.json            compiled Turf: abi + bytecode, deployed by both paths
 web/src/buildings.js     Overpass -> GeoJSON, feature id = OSM way id, cached
 web/src/paint.js         the MapLibre paint expression + setFeatureState helpers
 web/src/store.js         claims live onchain, or locally when no contract is set
@@ -45,13 +47,24 @@ nothing to break at 3am. Pushing to `main` publishes `web/` to GitHub Pages.
 
 ## Going onchain
 
+**From a phone, no terminal.** Open `deploy.html` inside a wallet app's browser
+(MetaMask → Browser → paste the URL), connect, tap deploy. The wallet signs the
+contract creation, the page reports the address and block, and hands you a link
+to the board running on it — `?turf=0x…&from=<block>` points the board at any
+contract without a commit, so a deploy made on a phone is shareable immediately.
+The private key never leaves the wallet.
+
+**From a machine with a terminal**, either toolchain works and both write the
+address and deploy block straight into `web/src/config.js`:
+
 ```sh
-cast wallet new                     # throwaway key, never a wallet with funds
-cp contracts/.env.example contracts/.env   # paste the key, fund the address
-./contracts/deploy.sh               # deploys and writes web/src/config.js
+npm install && PRIVATE_KEY=0x... node scripts/deploy.mjs   # node + viem
+./contracts/deploy.sh                                      # foundry
 ```
 
-Testnet MON comes from the Monad faucet, or from the organizers at the venue. The page picks up
+The node path deploys `web/turf.json`, the committed build artifact, so it needs
+neither forge nor solc. Testnet MON comes from the Monad faucet, or from the
+organizers at the venue. The page picks up
 the chain path automatically, prompts to add Monad testnet on the first tap, and
 every player's board then converges on the `Claimed` event feed.
 

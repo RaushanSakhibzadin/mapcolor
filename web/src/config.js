@@ -1,11 +1,19 @@
 // --- Chain -------------------------------------------------------------
 // Leave as the zero address to play in local sandbox mode: taps paint and
-// persist in your browser only. Fill this in after `forge create` and the same
-// page becomes the real onchain game.
-export const TURF_ADDRESS = "0x0000000000000000000000000000000000000000";
+// persist in your browser only. Deploy the contract (deploy.html, or one of the
+// scripts) and the same page becomes the real onchain game.
+const DEFAULT_ADDRESS = "0x0000000000000000000000000000000000000000";
+const DEFAULT_BLOCK = 0n;
 
-// Block the contract was deployed in — replaying from 0 works but is slow.
-export const DEPLOY_BLOCK = 0n;
+// ?turf=0x…&from=<block> points the board at a contract without a commit, so a
+// deploy made on a phone is shareable as a link straight away.
+const params = new URLSearchParams(location.search);
+const override = params.get("turf");
+
+export const TURF_ADDRESS = /^0x[0-9a-fA-F]{40}$/.test(override ?? "") ? override : DEFAULT_ADDRESS;
+export const DEPLOY_BLOCK = override && /^\d+$/.test(params.get("from") ?? "")
+  ? BigInt(params.get("from"))
+  : DEFAULT_BLOCK;
 
 // --- Map ---------------------------------------------------------------
 // OpenFreeMap needs no API key and no signup. Swap in MapTiler/your own tiles
