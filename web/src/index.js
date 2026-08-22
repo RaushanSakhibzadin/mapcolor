@@ -3,11 +3,17 @@ import { AREA, BELGRADE, STYLE_URL } from "./config.js";
 import { loadBuildings } from "./buildings.js";
 import { paintAll, paintClaim, turfLayers } from "./paint.js";
 import { createStore } from "./store.js";
+import { log, logMapErrors } from "./log.js";
 import { TEAMS, colorOf } from "./teams.js";
 
 const ids = { source: "turf" };
 const el = (id) => document.getElementById(id);
-const setStatus = (text) => (el("status").textContent = text);
+
+function setStatus(text, bad = false) {
+  el("status").textContent = bad ? `${text} — tap for log` : text;
+  el("status").className = bad ? "bad" : "";
+  log(text);
+}
 
 let myTeam = 1;
 let store = null;
@@ -22,10 +28,15 @@ const map = new maplibregl.Map({
   ],
 });
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+logMapErrors(map);
+log("map created, style", STYLE_URL);
+globalThis.__mcBooted();
 
 map.on("load", async () => {
+  log("map load fired");
   try {
     const buildings = await loadBuildings({ onStatus: setStatus });
+    log("buildings", buildings.features.length, "first id", String(buildings.features[0]?.id));
     map.addSource("turf", { type: "geojson", data: buildings });
     for (const layer of turfLayers(ids)) map.addLayer(layer);
 
@@ -39,16 +50,18 @@ map.on("load", async () => {
 
     paintAll(map, ids, store.claims);
     renderScores();
+    log("store", store.mode, "with", store.claims.size, "claims");
     el("mode").textContent = store.label;
     setStatus(`${buildings.features.length} buildings · tap one to claim it`);
   } catch (error) {
-    setStatus(`could not start: ${error.message}`);
+    setStatus(`could not start: ${error.message}`, true);
     console.error(error);
   }
 });
 
 map.on("click", "turf", async (e) => {
   const osmWayId = e.features[0]?.id;
+  log("tap", { id: String(osmWayId), team: myTeam, ready: Boolean(store) });
   if (osmWayId == null || !store) return;
 
   // Paint first, confirm later: the tap has to feel instant. If the claim
@@ -59,7 +72,7 @@ map.on("click", "turf", async (e) => {
     await store.claim(osmWayId, myTeam);
   } catch (error) {
     paintClaim(map, ids, osmWayId, previous);
-    setStatus(`claim failed: ${error.shortMessage ?? error.message}`);
+    setStatus(`claim failed: ${error.shortMessage ?? error.message}`, true);
   }
 });
 
