@@ -51,13 +51,29 @@ export const TURF_ABI = [
   },
 ];
 
-export const publicClient = createPublicClient({
-  chain: monadTestnet,
-  transport: http(),
-  // Monad blocks are fast; poll faster than viem's 4s default or the room
-  // sees the map lag behind the taps.
-  pollingInterval: 400,
-});
+// Monad blocks are fast; poll faster than viem's 4s default or the room sees
+// the map lag behind the taps.
+const POLLING = 400;
+
+// Two ways to read the chain, tried in order. The wallet's own provider goes
+// first because it already knows a working RPC for the network it is on —
+// which is how the deploy succeeded while our RPC constant was unreachable.
+const injected = globalThis.ethereum;
+const readers = [
+  injected && {
+    name: "wallet",
+    client: createPublicClient({ chain: monadTestnet, transport: custom(injected), pollingInterval: POLLING }),
+  },
+  {
+    name: monadTestnet.rpcUrls.default.http[0],
+    client: createPublicClient({ chain: monadTestnet, transport: http(), pollingInterval: POLLING }),
+  },
+].filter(Boolean);
+
+// Whichever reader last worked; the live watch follows the replay.
+let preferred = readers[0];
+
+export const publicClient = preferred.client;
 
 export async function connect() {
   if (!window.ethereum) throw new Error("No injected wallet found");
@@ -82,23 +98,34 @@ async function ensureMonad(wallet) {
 
 /** Replay every claim from deployment, newest write wins. */
 export async function loadClaims(address, fromBlock = 0n) {
-  const logs = await publicClient.getContractEvents({
-    address,
-    abi: TURF_ABI,
-    eventName: "Claimed",
-    fromBlock,
-    toBlock: "latest",
-  });
-  const claims = new Map();
-  for (const log of logs) {
-    claims.set(Number(log.args.osmWayId), Number(log.args.team));
+  let lastError;
+  for (const reader of readers) {
+    try {
+      const events = await reader.client.getContractEvents({
+        address,
+        abi: TURF_ABI,
+        eventName: "Claimed",
+        fromBlock,
+        toBlock: "latest",
+      });
+      preferred = reader;
+      log(`replayed ${events.length} claims via ${reader.name}`);
+      const claims = new Map();
+      for (const entry of events) {
+        claims.set(Number(entry.args.osmWayId), Number(entry.args.team));
+      }
+      return claims;
+    } catch (error) {
+      lastError = error;
+      log(`replay via ${reader.name} failed:`, error.shortMessage ?? error.message);
+    }
   }
-  return claims;
+  throw lastError ?? new Error("no way to read the chain");
 }
 
 /** Tail new claims. Returns an unwatch function. */
 export function watchClaims(address, onClaim) {
-  return publicClient.watchContractEvent({
+  return preferred.client.watchContractEvent({
     address,
     abi: TURF_ABI,
     eventName: "Claimed",
